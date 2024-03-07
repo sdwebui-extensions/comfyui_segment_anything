@@ -21,6 +21,7 @@ from local_groundingdino.util.slconfig import SLConfig as local_groundingdino_SL
 from local_groundingdino.models import build_model as local_groundingdino_build_model
 import glob
 import folder_paths
+from comfy.cli_args import args
 
 logger = logging.getLogger('comfyui_segment_anything')
 
@@ -63,6 +64,8 @@ groundingdino_model_list = {
 
 def get_bert_base_uncased_model_path():
     comfy_bert_model_base = os.path.join(folder_paths.models_dir, 'bert-base-uncased')
+    if args.just_ui:
+        comfy_bert_model_base = os.path.join(os.path.dirname(args.data_dir), 'models/bert-base-uncased')
     if glob.glob(os.path.join(comfy_bert_model_base, '**/model.safetensors'), recursive=True):
         print('grounding-dino is using models/bert-base-uncased')
         return comfy_bert_model_base
@@ -102,13 +105,18 @@ def get_local_filepath(url, dirname, local_file_name=None):
         return destination
 
     folder = os.path.join(folder_paths.models_dir, dirname)
+    if args.just_ui:
+        folder = os.path.join(os.path.dirname(args.data_dir), 'models', dirname)
     if not os.path.exists(folder):
         os.makedirs(folder)
 
     destination = os.path.join(folder, local_file_name)
     if not os.path.exists(destination):
-        logger.warn(f'downloading {url} to {destination}')
-        download_url_to_file(url, destination)
+        if os.path.exists(os.path.join('/stable-diffusion-cache/models', dirname, local_file_name)):
+            os.system(f"cp {os.path.join('/stable-diffusion-cache/models', dirname, local_file_name)} {destination}")
+        if not os.path.exists(destination):
+            logger.warn(f'downloading {url} to {destination}')
+            download_url_to_file(url, destination)
     return destination
 
 
