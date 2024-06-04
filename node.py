@@ -69,6 +69,8 @@ def get_bert_base_uncased_model_path():
     if glob.glob(os.path.join(comfy_bert_model_base, '**/model.safetensors'), recursive=True):
         print('grounding-dino is using models/bert-base-uncased')
         return comfy_bert_model_base
+    if os.path.exists('/stable-diffusion-cache/models/models--bert-base-uncased'):
+        return '/stable-diffusion-cache/models/models--bert-base-uncased'
     return 'bert-base-uncased'
 
 def list_files(dirpath, extensions=[]):
@@ -113,7 +115,9 @@ def get_local_filepath(url, dirname, local_file_name=None):
     destination = os.path.join(folder, local_file_name)
     if not os.path.exists(destination):
         if os.path.exists(os.path.join('/stable-diffusion-cache/models', dirname, local_file_name)):
-            os.system(f"cp {os.path.join('/stable-diffusion-cache/models', dirname, local_file_name)} {destination}")
+            destination = os.path.join('/stable-diffusion-cache/models', dirname, local_file_name)
+            logger.info(f'using cache model {destination}')
+            return destination
         if not os.path.exists(destination):
             logger.warn(f'downloading {url} to {destination}')
             download_url_to_file(url, destination)
