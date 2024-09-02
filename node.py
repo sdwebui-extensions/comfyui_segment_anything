@@ -241,7 +241,9 @@ def split_image_mask(image):
 def sam_segment(
     sam_model,
     image,
-    boxes
+    boxes,
+    point_coords=None,
+    point_labels=None,
 ):
     if boxes.shape[0] == 0:
         return None
@@ -257,12 +259,33 @@ def sam_segment(
         boxes, image_np.shape[:2])
     sam_device = comfy.model_management.get_torch_device()
     masks, _, _ = predictor.predict_torch(
-        point_coords=None,
-        point_labels=None,
+        point_coords=point_coords,
+        point_labels=point_labels,
         boxes=transformed_boxes.to(sam_device),
         multimask_output=False)
     masks = masks.permute(1, 0, 2, 3).cpu().numpy()
     return create_tensor_output(image_np, masks, boxes)
+
+def mask_sam_segment(
+    sam_model,
+    image,
+    point_coords=None,
+    point_labels=None,
+):
+    sam_is_hq = False
+    # TODO: more elegant
+    if hasattr(sam_model, 'model_name') and 'hq' in sam_model.model_name:
+        sam_is_hq = True
+    predictor = SamPredictorHQ(sam_model, sam_is_hq)
+    image_np = np.array(image)
+    image_np_rgb = image_np[..., :3]
+    predictor.set_image(image_np_rgb)
+    masks, _, _ = predictor.predict_torch(
+        point_coords=point_coords,
+        point_labels=point_labels,
+        multimask_output=False)
+    masks = masks.permute(1, 0, 2, 3).cpu().numpy()
+    return create_tensor_output(image_np, masks, None)
 
 
 class SAMModelLoader:
@@ -335,6 +358,41 @@ class GroundingDinoSAMSegment:
             if boxes.shape[0] == 0:
                 break
             (images, masks) = sam_segment(
+                sam_model,
+                item,
+                boxes
+            )
+            res_images.extend(images)
+            res_masks.extend(masks)
+        if len(res_images) == 0:
+            _, height, width, _ = image.size()
+            empty_mask = torch.zeros((1, height, width), dtype=torch.uint8, device="cpu")
+            return (empty_mask, empty_mask)
+        return (torch.cat(res_images, dim=0), torch.cat(res_masks, dim=0))
+    
+class MaskSAMSegment:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "sam_model": ('SAM_MODEL', {}),
+                "image": ('IMAGE', {}),
+                "mask": ('MASK', {}),
+            }
+        }
+    CATEGORY = "segment_anything"
+    FUNCTION = "main"
+    RETURN_TYPES = ("IMAGE", "MASK")
+
+    def main(self, mask, sam_model, image):
+        res_images = []
+        res_masks = []
+        for img_idx, item in enumerate(image):
+            item = Image.fromarray(
+                np.clip(255. * item.cpu().numpy(), 0, 255).astype(np.uint8)).convert('RGBA')
+            item_mask = mask[img_idx].cpu().numpy()
+            print(item_mask)
+            (images, masks) = mask_sam_segment(
                 sam_model,
                 item,
                 boxes
