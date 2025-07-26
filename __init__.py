@@ -3,6 +3,7 @@ from .install import *
 
 NODE_CLASS_MAPPINGS = {
     'SAMModelLoader (segment anything)': SAMModelLoader,
+    'Pai Grounding Dino SAMS egment': PaiGroundingDinoSAMSegment,
     'GroundingDinoModelLoader (segment anything)': GroundingDinoModelLoader,
     'GroundingDinoSAMSegment (segment anything)': GroundingDinoSAMSegment,
     'InvertMask (segment anything)': InvertMask,

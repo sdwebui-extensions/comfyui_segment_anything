@@ -438,3 +438,54 @@ class IsMaskEmptyNode:
 
     def main(self, mask):
         return (torch.all(mask == 0).int().item(), )
+
+class PaiGroundingDinoSAMSegment:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "sam_model": ('SAM_MODEL', {}),
+                "grounding_dino_model": ('GROUNDING_DINO_MODEL', {}),
+                "image": ('IMAGE', {}),
+                "prompt": ("STRING", {}),
+                "threshold": ("FLOAT", {
+                    "default": 0.3,
+                    "min": 0,
+                    "max": 1.0,
+                    "step": 0.01
+                }),
+            }
+        }
+    CATEGORY = "segment_anything"
+    FUNCTION = "main"
+    RETURN_TYPES = ("IMAGE", "MASK", "INT")
+
+    def main(self, grounding_dino_model, sam_model, image, prompt, threshold):
+        res_images = []
+        res_masks = []
+        max_boxes = 0
+        for item in image:
+            item = Image.fromarray(
+                np.clip(255. * item.cpu().numpy(), 0, 255).astype(np.uint8)).convert('RGBA')
+            boxes = groundingdino_predict(
+                grounding_dino_model,
+                item,
+                prompt,
+                threshold
+            )
+            if boxes.shape[0] == 0:
+                break
+            if boxes.shape[0]>max_boxes:
+                max_boxes = boxes.shape[0]
+            (images, masks) = sam_segment(
+                sam_model,
+                item,
+                boxes
+            )
+            res_images.extend(images)
+            res_masks.extend(masks)
+        if len(res_images) == 0:
+            _, height, width, _ = image.size()
+            empty_mask = torch.zeros((1, height, width), dtype=torch.uint8, device="cpu")
+            return (empty_mask, empty_mask)
+        return (torch.cat(res_images, dim=0), torch.cat(res_masks, dim=0), max_boxes)
